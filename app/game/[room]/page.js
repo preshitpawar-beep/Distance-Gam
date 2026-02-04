@@ -1,75 +1,96 @@
 "use client";
 
-import StoryScene from "./StoryScene";
+import { useEffect, useState } from "react";
+import GameCanvas from "../../../components/GameCanvas";
 
-export default function GameCanvas({ room }) {
+export default function GameRoom({ params }) {
+  const { room } = params;
+
+  const [names, setNames] = useState(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(`names-${room}`);
+    if (stored) {
+      setNames(JSON.parse(stored));
+    }
+  }, [room]);
+
   return (
-    <div style={outer}>
-      {/* Top HUD */}
-      <div style={header}>
-        <span style={title}>💙 Miles Apart</span>
-        <span style={roomCode}>Room: {room}</span>
-      </div>
+    <main style={container}>
+      {!ready ? (
+        <div style={card}>
+          <h2 style={title}>Room {room}</h2>
 
-      {/* Game Area */}
-      <div style={gameArea}>
-        <StoryScene room={room} />
-      </div>
+          {names && (
+            <p style={namesText}>
+              {names.you} 💙 {names.partner}
+            </p>
+          )}
 
-      {/* Footer */}
-      <div style={footer}>
-        <span style={footerText}>
-          Two players • One journey
-        </span>
-      </div>
-    </div>
+          <p style={info}>
+            Both players should open this room
+            on their phones.
+          </p>
+
+          <button style={button} onClick={() => setReady(true)}>
+            I’m Ready ❤️
+          </button>
+        </div>
+      ) : (
+        <GameCanvas room={room} names={names} />
+      )}
+    </main>
   );
 }
 
-/* ---------------- STYLES ---------------- */
+/* ---------- STYLES ---------- */
 
-const outer = {
+const container = {
   minHeight: "100vh",
-  display: "flex",
-  flexDirection: "column",
-  background: "linear-gradient(180deg, #020617, #020617)",
-  fontFamily: "system-ui, -apple-system, BlinkMacSystemFont"
-};
-
-const header = {
-  padding: "14px 18px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  color: "white",
-  borderBottom: "1px solid #1e293b"
-};
-
-const title = {
-  fontSize: "18px",
-  fontWeight: "600"
-};
-
-const roomCode = {
-  fontSize: "13px",
-  color: "#94a3b8"
-};
-
-const gameArea = {
-  flex: 1,
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
   padding: "20px"
 };
 
-const footer = {
-  padding: "10px",
-  textAlign: "center",
-  borderTop: "1px solid #1e293b"
+const card = {
+  width: "100%",
+  maxWidth: "360px",
+  background: "#020617",
+  borderRadius: "22px",
+  padding: "26px 22px",
+  boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+  textAlign: "center"
 };
 
-const footerText = {
-  fontSize: "12px",
-  color: "#64748b"
+const title = {
+  color: "white",
+  fontSize: "22px",
+  marginBottom: "10px"
+};
+
+const namesText = {
+  color: "#a5b4fc",
+  fontSize: "14px",
+  marginBottom: "14px"
+};
+
+const info = {
+  fontSize: "14px",
+  color: "#94a3b8",
+  marginBottom: "20px",
+  lineHeight: "1.5"
+};
+
+const button = {
+  width: "100%",
+  padding: "14px",
+  fontSize: "16px",
+  borderRadius: "12px",
+  border: "none",
+  background: "#22c55e",
+  color: "#020617",
+  fontWeight: "600",
+  cursor: "pointer"
 };
