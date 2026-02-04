@@ -2,10 +2,10 @@
 
 import StoryScene from "./StoryScene";
 
-export default function GameCanvas() {
+export default function GameCanvas({ room }) {
   return (
     <div style={container}>
-      <StoryScene />
+      <StoryScene room={room} />
     </div>
   );
 }
