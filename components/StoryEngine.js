@@ -8,9 +8,10 @@ import {
   clearChoices
 } from "../lib/multiplayer";
 
-export default function StoryEngine({ room }) {
+export default function StoryEngine({ room, onChapterComplete }) {
   const [sceneIndex, setSceneIndex] = useState(0);
-  const [status, setStatus] = useState("choose"); // choose | waiting | result
+  const [status, setStatus] = useState("choose"); 
+  // choose | waiting | result
 
   const scene = STORY[sceneIndex];
 
@@ -40,18 +41,24 @@ export default function StoryEngine({ room }) {
     const timeout = setTimeout(() => {
       clearChoices(room, scene.id);
       setStatus("choose");
+
+      // Notify GameFlow after each chapter
+      if (onChapterComplete) {
+        onChapterComplete();
+      }
+
       setSceneIndex((prev) => prev + 1);
     }, 2500);
 
     return () => clearTimeout(timeout);
-  }, [status, room, scene]);
+  }, [status, room, scene, onChapterComplete]);
 
   if (!scene) {
     return (
       <div style={card}>
-        <h2 style={title}>✨ Journey Complete ✨</h2>
+        <h2 style={title}>✨ Story Complete ✨</h2>
         <p style={text}>
-          You made it through every moment together.
+          Every choice you made brought you closer.
         </p>
       </div>
     );
