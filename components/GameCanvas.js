@@ -1,6 +1,6 @@
 "use client";
 
-import StoryEngine from "./StoryEngine";
+import GameFlow from "./GameFlow";
 
 export default function GameCanvas({ room, names }) {
   return (
@@ -23,7 +23,7 @@ export default function GameCanvas({ room, names }) {
 
       {/* Game Area */}
       <div style={gameArea}>
-        <StoryEngine room={room} />
+        <GameFlow room={room} />
       </div>
 
       {/* Footer */}
