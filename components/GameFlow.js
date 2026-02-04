@@ -28,22 +28,39 @@ export default function GameFlow({ room }) {
     }
   }
 
-  if (storyDone) {
-    return (
-      <div style={card}>
-        <h2 style={title}>💙 Together at Last</h2>
+import { markCompleted, hasCompleted } from "../lib/replay";
+
+if (storyDone) {
+  const replay = hasCompleted(room);
+
+  markCompleted(room);
+
+  return (
+    <div style={card}>
+      <h2 style={title}>💙 Together at Last</h2>
+
+      <p style={text}>
+        No matter the distance, every moment you shared
+        brought you closer.
+      </p>
+
+      {replay ? (
         <p style={text}>
-          No matter the distance, every moment you shared
-          brought you closer.
+          You came back and played it again.
+          That says more than the game ever could 💫
         </p>
+      ) : (
         <p style={text}>
           This journey was only possible because
           you played it together.
         </p>
-        <p style={ending}>✨ The End ✨</p>
-      </div>
-    );
-  }
+      )}
+
+      <p style={ending}>✨ The End ✨</p>
+    </div>
+  );
+}
+
 
   return stage === "story" ? (
     <StoryEngine
