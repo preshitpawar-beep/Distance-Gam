@@ -1,56 +1,75 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import GameCanvas from "../../../components/GameCanvas";
+import StoryScene from "./StoryScene";
 
-export default function GameRoom({ params }) {
-  const { room } = params;
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const key = `ready-${room}`;
-    const current = JSON.parse(localStorage.getItem(key) || "[]");
-
-    if (!current.includes("player")) {
-      current.push("player");
-      localStorage.setItem(key, JSON.stringify(current));
-    }
-  }, [room]);
-
-  function startGame() {
-    setReady(true);
-  }
-
+export default function GameCanvas({ room }) {
   return (
-    <main style={container}>
-      {!ready ? (
-        <>
-          <h2>Room: {room}</h2>
-          <p>Both players tap when ready</p>
-          <button style={button} onClick={startGame}>
-            I’m Ready ❤️
-          </button>
-        </>
-      ) : (
-        <GameCanvas />
-      )}
-    </main>
+    <div style={outer}>
+      {/* Top HUD */}
+      <div style={header}>
+        <span style={title}>💙 Miles Apart</span>
+        <span style={roomCode}>Room: {room}</span>
+      </div>
+
+      {/* Game Area */}
+      <div style={gameArea}>
+        <StoryScene room={room} />
+      </div>
+
+      {/* Footer */}
+      <div style={footer}>
+        <span style={footerText}>
+          Two players • One journey
+        </span>
+      </div>
+    </div>
   );
 }
 
-const container = {
+/* ---------------- STYLES ---------------- */
+
+const outer = {
   minHeight: "100vh",
+  display: "flex",
+  flexDirection: "column",
+  background: "linear-gradient(180deg, #020617, #020617)",
+  fontFamily: "system-ui, -apple-system, BlinkMacSystemFont"
+};
+
+const header = {
+  padding: "14px 18px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  color: "white",
+  borderBottom: "1px solid #1e293b"
+};
+
+const title = {
+  fontSize: "18px",
+  fontWeight: "600"
+};
+
+const roomCode = {
+  fontSize: "13px",
+  color: "#94a3b8"
+};
+
+const gameArea = {
+  flex: 1,
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  flexDirection: "column"
+  padding: "20px"
 };
 
-const button = {
-  padding: "14px 26px",
-  fontSize: "18px",
-  borderRadius: "10px",
-  border: "none",
-  background: "#2563eb",
-  color: "white"
+const footer = {
+  padding: "10px",
+  textAlign: "center",
+  borderTop: "1px solid #1e293b"
+};
+
+const footerText = {
+  fontSize: "12px",
+  color: "#64748b"
 };
