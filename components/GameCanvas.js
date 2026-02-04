@@ -1,5 +1,7 @@
 "use client";
 
+import StoryEngine from "./StoryEngine";
+
 export default function GameCanvas({ room, names }) {
   return (
     <div style={outer}>
@@ -21,12 +23,7 @@ export default function GameCanvas({ room, names }) {
 
       {/* Game Area */}
       <div style={gameArea}>
-        <div style={placeholder}>
-          <h3 style={placeholderTitle}>Adventure begins…</h3>
-          <p style={placeholderText}>
-            Your story will appear here very soon.
-          </p>
-        </div>
+        <StoryEngine room={room} />
       </div>
 
       {/* Footer */}
@@ -93,26 +90,6 @@ const gameArea = {
   justifyContent: "center",
   alignItems: "center",
   padding: "20px"
-};
-
-const placeholder = {
-  width: "100%",
-  maxWidth: "360px",
-  background: "#020617",
-  borderRadius: "22px",
-  padding: "28px 22px",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
-  textAlign: "center"
-};
-
-const placeholderTitle = {
-  fontSize: "20px",
-  marginBottom: "10px"
-};
-
-const placeholderText = {
-  fontSize: "14px",
-  color: "#94a3b8"
 };
 
 const footer = {
