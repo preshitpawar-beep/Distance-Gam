@@ -1,37 +1,38 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import GameCanvas from "../../../components/GameCanvas";
 
 export default function GameRoom({ params }) {
   const { room } = params;
-  const [players, setPlayers] = useState(1);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const key = `room-${room}`;
-
+    const key = `ready-${room}`;
     const current = JSON.parse(localStorage.getItem(key) || "[]");
 
     if (!current.includes("player")) {
       current.push("player");
       localStorage.setItem(key, JSON.stringify(current));
     }
-
-    setPlayers(current.length);
   }, [room]);
+
+  function startGame() {
+    setReady(true);
+  }
 
   return (
     <main style={container}>
-      <h2>Room Code: {room}</h2>
-      <p>Players in room: {players} / 2</p>
-
-      {players < 2 ? (
-        <p style={{ color: "#888" }}>
-          Waiting for second player…
-        </p>
+      {!ready ? (
+        <>
+          <h2>Room: {room}</h2>
+          <p>Both players tap when ready</p>
+          <button style={button} onClick={startGame}>
+            I’m Ready ❤️
+          </button>
+        </>
       ) : (
-        <button style={button}>
-          Start Game 🎮
-        </button>
+        <GameCanvas />
       )}
     </main>
   );
@@ -40,18 +41,16 @@ export default function GameRoom({ params }) {
 const container = {
   minHeight: "100vh",
   display: "flex",
-  flexDirection: "column",
   justifyContent: "center",
   alignItems: "center",
-  fontFamily: "sans-serif",
-  gap: "15px"
+  flexDirection: "column"
 };
 
 const button = {
-  padding: "14px 24px",
+  padding: "14px 26px",
   fontSize: "18px",
   borderRadius: "10px",
   border: "none",
-  background: "#dc2626",
+  background: "#2563eb",
   color: "white"
 };
