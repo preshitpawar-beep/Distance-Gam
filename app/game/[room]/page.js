@@ -1,5 +1,6 @@
 "use client";
 
+import { startMusic } from "../../../lib/music";
 import { useEffect, useState } from "react";
 import GameCanvas from "../../../components/GameCanvas";
 
@@ -33,8 +34,14 @@ export default function GameRoom({ params }) {
             on their phones.
           </p>
 
-          <button style={button} onClick={() => setReady(true)}>
-            I’m Ready ❤️
+          <button
+            style={button}
+            onClick={() => {
+             startMusic();
+             setReady(true);
+           }}
+  >
+  I’m Ready ❤️
           </button>
         </div>
       ) : (
