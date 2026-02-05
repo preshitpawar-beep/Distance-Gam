@@ -1,63 +1,83 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { db } from "../lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-const EMOJIS = ["💙", "🌙", "✨", "📞"];
+const CARDS = ["🐶", "🐱", "🐶", "🐱"];
 
-export default function MiniGameMemory({ onComplete }) {
-  const cards = [...EMOJIS, ...EMOJIS].sort(() => Math.random() - 0.5);
+export default function MiniGameMemory({ room, onComplete }) {
+  const ref = doc(db, "rooms", room, "mini", "memory");
 
-  const [flipped, setFlipped] = useState([]);
-  const [matched, setMatched] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [showResult, setShowResult] = useState(false);
 
-  function flip(index) {
-    if (flipped.length === 2) return;
-    if (flipped.includes(index)) return;
-    if (matched.includes(index)) return;
+  // Sync answers
+  useEffect(() => {
+    const unsub = onSnapshot(ref, snap => {
+      if (!snap.exists()) return;
+      setAnswers(snap.data().answers || {});
+    });
+    return () => unsub();
+  }, []);
 
-    const newFlipped = [...flipped, index];
-    setFlipped(newFlipped);
-
-    if (newFlipped.length === 2) {
-      const [i1, i2] = newFlipped;
-      if (cards[i1] === cards[i2]) {
-        setMatched([...matched, i1, i2]);
-      }
-
-      setTimeout(() => setFlipped([]), 800);
+  // Show result when both picked
+  useEffect(() => {
+    if (Object.keys(answers).length === 2) {
+      setShowResult(true);
     }
+  }, [answers]);
+
+  async function pick(card) {
+    await setDoc(
+      ref,
+      {
+        answers: {
+          ...answers,
+          [crypto.randomUUID()]: card
+        }
+      },
+      { merge: true }
+    );
   }
 
-  const completed = matched.length === cards.length;
+  async function finish() {
+    await setDoc(ref, { answers: {} }, { merge: true });
+    onComplete();
+  }
+
+  const values = Object.values(answers);
+  const matched =
+    values.length === 2 && values[0] === values[1];
 
   return (
     <div style={card}>
-      <h3 style={title}>Memory Match</h3>
+      <h3 style={title}>Memory Match 🧠</h3>
+      <p style={text}>Pick the same card</p>
 
-      <div style={grid}>
-        {cards.map((emoji, i) => {
-          const isVisible =
-            flipped.includes(i) || matched.includes(i);
-
-          return (
+      {!showResult && (
+        <div style={grid}>
+          {CARDS.map((c, i) => (
             <button
               key={i}
-              style={{
-                ...cell,
-                background: isVisible ? "#38bdf8" : "#020617"
-              }}
-              onClick={() => flip(i)}
+              style={btn}
+              onClick={() => pick(c)}
             >
-              {isVisible ? emoji : "?"}
+              {c}
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {completed && (
-        <button style={completeButton} onClick={onComplete}>
-          Continue 💙
-        </button>
+      {showResult && (
+        <>
+          <p style={result}>
+            {matched ? "Memory synced 🔥" : "Different picks 😄"}
+          </p>
+          <button style={continueBtn} onClick={finish}>
+            Continue ▶️
+          </button>
+        </>
       )}
     </div>
   );
@@ -66,43 +86,51 @@ export default function MiniGameMemory({ onComplete }) {
 /* ---------- STYLES ---------- */
 
 const card = {
-  width: "100%",
-  maxWidth: "360px",
+  maxWidth: 360,
   background: "#020617",
-  borderRadius: "22px",
-  padding: "24px 20px",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+  padding: 24,
+  borderRadius: 20,
   textAlign: "center"
 };
 
 const title = {
-  fontSize: "18px",
-  marginBottom: "16px"
+  fontSize: 18,
+  marginBottom: 8
+};
+
+const text = {
+  fontSize: 14,
+  color: "#c7d2fe",
+  marginBottom: 16
 };
 
 const grid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
-  gap: "10px",
-  marginBottom: "18px"
+  display: "flex",
+  justifyContent: "center",
+  gap: 12,
+  flexWrap: "wrap"
 };
 
-const cell = {
-  aspectRatio: "1 / 1",
-  borderRadius: "12px",
-  border: "1px solid #1e293b",
-  fontSize: "20px",
-  color: "#020617",
+const btn = {
+  padding: 18,
+  fontSize: 20,
+  borderRadius: 14,
+  border: "none",
+  background: "#38bdf8",
   cursor: "pointer"
 };
 
-const completeButton = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "12px",
+const result = {
+  fontSize: 16,
+  marginBottom: 14,
+  color: "#a5b4fc"
+};
+
+const continueBtn = {
+  padding: "10px 18px",
+  borderRadius: 14,
   border: "none",
   background: "#22c55e",
-  color: "#020617",
-  fontWeight: "600",
+  fontWeight: 700,
   cursor: "pointer"
 };
