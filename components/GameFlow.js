@@ -12,21 +12,23 @@ import MiniGameMemory from "./MiniGameMemory";
 import { STORY } from "../lib/storyData";
 
 /*
-  ================================
-  GAME DESIGN (FINAL & STABLE)
-  ================================
+=====================================
+FINAL GAME FLOW (LOCKED)
+=====================================
 
-  - Questions NEVER repeat in one run
-  - All mini-games appear in a fixed order
-  - Both players stay perfectly in sync
-  - Progression is deterministic (no guessing)
+RULES:
+- Questions NEVER repeat in one run
+- Both players are always on same screen
+- Skip works globally
+- Mini-games appear ONCE in fixed order
+- Manual progression everywhere
 
-  FLOW:
-  5 prompts → Choice Game
-  5 prompts → Tap Game
-  5 prompts → Puzzle Game
-  5 prompts → Memory Game
-  → End
+FLOW:
+5 prompts → Choice
+5 prompts → Tap
+5 prompts → Puzzle
+5 prompts → Memory
+→ End
 */
 
 const PROMPTS_BEFORE_GAME = 5;
@@ -44,90 +46,84 @@ export default function GameFlow({ room }) {
   const [stage, setStage] = useState("story"); // story | mini | end
   const [promptIndex, setPromptIndex] = useState(0);
   const [usedPrompts, setUsedPrompts] = useState([]);
-  const [miniIndex, setMiniIndex] = useState(0);
   const [promptCounter, setPromptCounter] = useState(0);
+  const [miniIndex, setMiniIndex] = useState(0);
 
-  /* --------------------------------
+  /* -------------------------------
      REAL-TIME ROOM STATE
-  -------------------------------- */
+  ------------------------------- */
   useEffect(() => {
-    const unsub = onSnapshot(roomRef, (snap) => {
+    const unsub = onSnapshot(roomRef, snap => {
       if (!snap.exists()) return;
+      const d = snap.data();
 
-      const data = snap.data();
+      if (d.stage) setStage(d.stage);
+      if (typeof d.promptIndex === "number") setPromptIndex(d.promptIndex);
+      if (Array.isArray(d.usedPrompts)) setUsedPrompts(d.usedPrompts);
+      if (typeof d.promptCounter === "number") setPromptCounter(d.promptCounter);
+      if (typeof d.miniIndex === "number") setMiniIndex(d.miniIndex);
 
-      if (typeof data.promptIndex === "number") {
-        setPromptIndex(data.promptIndex);
-      }
-
-      if (Array.isArray(data.usedPrompts)) {
-        setUsedPrompts(data.usedPrompts);
-      }
-
-      if (typeof data.miniIndex === "number") {
-        setMiniIndex(data.miniIndex);
-      }
-
-      if (typeof data.promptCounter === "number") {
-        setPromptCounter(data.promptCounter);
-      }
-
-      if (data.stage) {
-        setStage(data.stage);
+      // GLOBAL SKIP
+      if (d.skip === true) {
+        advance();
+        setDoc(roomRef, { skip: false }, { merge: true });
       }
     });
 
     return () => unsub();
   }, []);
 
-  /* --------------------------------
-     ADVANCE LOGIC (SINGLE SOURCE)
-  -------------------------------- */
+  /* -------------------------------
+     SINGLE SOURCE ADVANCE
+  ------------------------------- */
   async function advance() {
-    // STORY → count prompt
+    // STORY → PROMPTS
     if (stage === "story") {
-      const nextPromptCounter = promptCounter + 1;
+      const nextCounter = promptCounter + 1;
 
-      // Pick next unused question
+      // find next unused prompt
       let nextPrompt = promptIndex + 1;
-      while (usedPrompts.includes(nextPrompt) && nextPrompt < STORY.length) {
+      while (
+        usedPrompts.includes(nextPrompt) &&
+        nextPrompt < STORY.length
+      ) {
         nextPrompt++;
       }
 
-      // If no prompts left → go to end
+      // no prompts left → end
       if (nextPrompt >= STORY.length) {
         await setDoc(roomRef, { stage: "end" }, { merge: true });
         return;
       }
 
-      // Every N prompts → mini-game
-      if (nextPromptCounter % PROMPTS_BEFORE_GAME === 0) {
+      // trigger mini-game
+      if (nextCounter % PROMPTS_BEFORE_GAME === 0) {
         await setDoc(
           roomRef,
           {
             stage: "mini",
             usedPrompts: [...usedPrompts, promptIndex],
-            promptCounter: nextPromptCounter
+            promptCounter: nextCounter
           },
           { merge: true }
         );
         return;
       }
 
-      // Normal prompt advance
+      // normal next prompt
       await setDoc(
         roomRef,
         {
           promptIndex: nextPrompt,
           usedPrompts: [...usedPrompts, promptIndex],
-          promptCounter: nextPromptCounter
+          promptCounter: nextCounter
         },
         { merge: true }
       );
       return;
     }
 
-    // MINI-GAME → next prompt or end
+    // MINI-GAME → NEXT STAGE
     if (stage === "mini") {
       const nextMini = miniIndex + 1;
 
@@ -147,9 +143,9 @@ export default function GameFlow({ room }) {
     }
   }
 
-  /* --------------------------------
+  /* -------------------------------
      END SCREEN
-  -------------------------------- */
+  ------------------------------- */
   if (stage === "end") {
     return (
       <div style={card}>
@@ -162,14 +158,15 @@ export default function GameFlow({ room }) {
     );
   }
 
-  /* --------------------------------
+  /* -------------------------------
      MINI-GAMES
-  -------------------------------- */
+  ------------------------------- */
   if (stage === "mini") {
     const game = GAME_SEQUENCE[miniIndex];
 
     return (
       <>
+        <SkipButton room={room} />
         {game === "choice" && (
           <MiniGameChoice room={room} onComplete={advance} />
         )}
@@ -177,30 +174,54 @@ export default function GameFlow({ room }) {
           <MiniGameTap onComplete={advance} />
         )}
         {game === "puzzle" && (
-          <MiniGamePuzzle onComplete={advance} />
+          <MiniGamePuzzle room={room} onComplete={advance} />
         )}
         {game === "memory" && (
-          <MiniGameMemory onComplete={advance} />
+          <MiniGameMemory room={room} onComplete={advance} />
         )}
       </>
     );
   }
 
-  /* --------------------------------
-     STORY (PROMPTS)
-  -------------------------------- */
+  /* -------------------------------
+     STORY PROMPTS
+  ------------------------------- */
   return (
-    <StoryEngine
-      room={room}
-      onChapterComplete={advance}
-    />
+    <>
+      <SkipButton room={room} />
+      <StoryEngine room={room} onChapterComplete={advance} />
+    </>
   );
 }
 
-/* --------------------------------
-   STYLES
--------------------------------- */
+/* -------------------------------
+   SKIP BUTTON (GLOBAL)
+------------------------------- */
+function SkipButton({ room }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+      <button
+        style={{
+          padding: "6px 12px",
+          borderRadius: 10,
+          background: "#334155",
+          color: "#e5e7eb",
+          border: "none",
+          cursor: "pointer"
+        }}
+        onClick={() =>
+          setDoc(doc(db, "rooms", room), { skip: true }, { merge: true })
+        }
+      >
+        Skip ⏭️
+      </button>
+    </div>
+  );
+}
 
+/* -------------------------------
+   STYLES
+------------------------------- */
 const card = {
   width: "100%",
   maxWidth: 360,
