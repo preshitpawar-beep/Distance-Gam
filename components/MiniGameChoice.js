@@ -1,54 +1,91 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { saveChoice, getChoices, clearChoices } from "../lib/multiplayer";
+import { db } from "../lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-const QUESTION = {
-  text: "What would you rather do together right now?",
-  options: [
-    "Go on a late-night walk 🌙",
-    "Watch something silly 😄",
-    "Just talk for hours 💬"
-  ]
-};
+const QUESTIONS = [
+  {
+    text: "Pick the same option!",
+    options: ["🔥 Fire", "🌊 Water"]
+  },
+  {
+    text: "Try to match!",
+    options: ["🍕 Pizza", "🍔 Burger"]
+  },
+  {
+    text: "Telepathy test!",
+    options: ["😎 Cool", "🤪 Crazy"]
+  }
+];
 
 export default function MiniGameChoice({ room, onComplete }) {
-  const [status, setStatus] = useState("choose"); // choose | waiting | result
-  const [matched, setMatched] = useState(false);
+  const roomRef = doc(db, "rooms", room, "mini", "choice");
 
-  function choose(option) {
-    saveChoice(room, "choice-mini", option);
-    setStatus("waiting");
+  const [index, setIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [showResult, setShowResult] = useState(false);
+
+  const question = QUESTIONS[index];
+
+  // Sync answers in real time
+  useEffect(() => {
+    const unsub = onSnapshot(roomRef, snap => {
+      if (!snap.exists()) return;
+      setAnswers(snap.data().answers || {});
+    });
+    return () => unsub();
+  }, []);
+
+  // Show result when both answered
+  useEffect(() => {
+    if (Object.keys(answers).length === 2) {
+      setShowResult(true);
+    }
+  }, [answers]);
+
+  async function choose(option) {
+    await setDoc(
+      roomRef,
+      {
+        answers: {
+          ...answers,
+          [crypto.randomUUID()]: option
+        }
+      },
+      { merge: true }
+    );
   }
 
-  useEffect(() => {
-    if (status !== "waiting") return;
+  async function nextQuestion() {
+    if (index < QUESTIONS.length - 1) {
+      // Move to next question
+      await setDoc(roomRef, { answers: {} }, { merge: true });
+      setAnswers({});
+      setShowResult(false);
+      setIndex(i => i + 1);
+    } else {
+      // 🔥 GAME COMPLETE → MOVE ON
+      await setDoc(roomRef, { answers: {} }, { merge: true });
+      onComplete();
+    }
+  }
 
-    const interval = setInterval(() => {
-      const choices = getChoices(room, "choice-mini");
-
-      if (choices.length === 2) {
-        setMatched(choices[0] === choices[1]);
-        clearChoices(room, "choice-mini");
-        setStatus("result");
-        clearInterval(interval);
-      }
-    }, 700);
-
-    return () => clearInterval(interval);
-  }, [status, room]);
+  const values = Object.values(answers);
+  const matched =
+    values.length === 2 && values[0] === values[1];
 
   return (
     <div style={card}>
-      <h3 style={title}>Same Page?</h3>
-      <p style={question}>{QUESTION.text}</p>
+      <h3 style={title}>Same Choice 🎯</h3>
+      <p style={text}>{question.text}</p>
 
-      {status === "choose" && (
+      {!showResult && (
         <div style={options}>
-          {QUESTION.options.map((opt, i) => (
+          {question.options.map((opt, i) => (
             <button
               key={i}
-              style={button}
+              style={btn}
               onClick={() => choose(opt)}
             >
               {opt}
@@ -57,20 +94,14 @@ export default function MiniGameChoice({ room, onComplete }) {
         </div>
       )}
 
-      {status === "waiting" && (
-        <p style={waiting}>Waiting for the other player…</p>
-      )}
-
-      {status === "result" && (
+      {showResult && (
         <>
           <p style={result}>
-            {matched
-              ? "You both chose the same thing 💙"
-              : "Different answers, still perfect together 😄"}
+            {matched ? "Perfect match 🔥" : "Not this time 😄"}
           </p>
 
-          <button style={continueBtn} onClick={onComplete}>
-            Continue
+          <button style={continueBtn} onClick={nextQuestion}>
+            Continue ▶️
           </button>
         </>
       )}
@@ -81,61 +112,50 @@ export default function MiniGameChoice({ room, onComplete }) {
 /* ---------- STYLES ---------- */
 
 const card = {
-  width: "100%",
-  maxWidth: "360px",
+  maxWidth: 360,
   background: "#020617",
-  borderRadius: "22px",
-  padding: "24px 20px",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+  padding: 24,
+  borderRadius: 20,
   textAlign: "center"
 };
 
 const title = {
-  fontSize: "18px",
-  marginBottom: "10px"
+  fontSize: 18,
+  marginBottom: 8
 };
 
-const question = {
-  fontSize: "14px",
+const text = {
+  fontSize: 14,
   color: "#c7d2fe",
-  marginBottom: "18px",
-  lineHeight: "1.5"
+  marginBottom: 16
 };
 
 const options = {
   display: "flex",
   flexDirection: "column",
-  gap: "12px"
+  gap: 12
 };
 
-const button = {
-  padding: "14px",
-  borderRadius: "14px",
+const btn = {
+  padding: 14,
+  borderRadius: 14,
   border: "none",
   background: "#38bdf8",
-  color: "#020617",
-  fontWeight: "600",
+  fontWeight: 600,
   cursor: "pointer"
 };
 
-const waiting = {
-  fontSize: "14px",
-  color: "#94a3b8"
-};
-
 const result = {
-  fontSize: "16px",
-  color: "#a5b4fc",
-  marginBottom: "14px"
+  fontSize: 16,
+  marginBottom: 14,
+  color: "#a5b4fc"
 };
 
 const continueBtn = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "12px",
+  padding: "10px 18px",
+  borderRadius: 14,
   border: "none",
   background: "#22c55e",
-  color: "#020617",
-  fontWeight: "600",
+  fontWeight: 700,
   cursor: "pointer"
 };
