@@ -1,69 +1,103 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { db } from "../lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-const SEQUENCE = ["💙", "🌙", "✨"];
+const PUZZLES = [
+  {
+    text: "Pick the SAME symbol",
+    options: ["⭐", "🔥", "🌙"]
+  },
+  {
+    text: "Match again!",
+    options: ["🍎", "🍌", "🍇"]
+  }
+];
 
-export default function MiniGamePuzzle({ onComplete }) {
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState(false);
+export default function MiniGamePuzzle({ room, onComplete }) {
+  const ref = doc(db, "rooms", room, "mini", "puzzle");
 
-  function press(symbol) {
-    if (symbol === SEQUENCE[progress]) {
-      setProgress((p) => p + 1);
-      setError(false);
+  const [index, setIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [showResult, setShowResult] = useState(false);
+
+  const puzzle = PUZZLES[index];
+
+  // Sync answers
+  useEffect(() => {
+    const unsub = onSnapshot(ref, snap => {
+      if (!snap.exists()) return;
+      setAnswers(snap.data().answers || {});
+    });
+    return () => unsub();
+  }, []);
+
+  // Show result only when both answered
+  useEffect(() => {
+    if (Object.keys(answers).length === 2) {
+      setShowResult(true);
+    }
+  }, [answers]);
+
+  async function choose(option) {
+    await setDoc(
+      ref,
+      {
+        answers: {
+          ...answers,
+          [crypto.randomUUID()]: option
+        }
+      },
+      { merge: true }
+    );
+  }
+
+  async function next() {
+    if (index < PUZZLES.length - 1) {
+      await setDoc(ref, { answers: {} }, { merge: true });
+      setAnswers({});
+      setShowResult(false);
+      setIndex(i => i + 1);
     } else {
-      setError(true);
-      setProgress(0);
+      // 🔥 PUZZLE COMPLETE
+      await setDoc(ref, { answers: {} }, { merge: true });
+      onComplete();
     }
   }
 
-  const completed = progress === SEQUENCE.length;
+  const values = Object.values(answers);
+  const matched =
+    values.length === 2 && values[0] === values[1];
 
   return (
     <div style={card}>
-      <h3 style={title}>Together Puzzle</h3>
+      <h3 style={title}>Puzzle Match 🧩</h3>
+      <p style={text}>{puzzle.text}</p>
 
-      <p style={instruction}>
-        Tap the symbols together in the correct order.
-      </p>
-
-      <div style={sequence}>
-        {SEQUENCE.map((s, i) => (
-          <span
-            key={i}
-            style={{
-              ...seqItem,
-              opacity: i < progress ? 1 : 0.3
-            }}
-          >
-            {s}
-          </span>
-        ))}
-      </div>
-
-      <div style={buttons}>
-        {SEQUENCE.map((s, i) => (
-          <button
-            key={i}
-            style={button}
-            onClick={() => press(s)}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <p style={errorText}>
-          Oops 😄 Try again — talk it through!
-        </p>
+      {!showResult && (
+        <div style={grid}>
+          {puzzle.options.map((opt, i) => (
+            <button
+              key={i}
+              style={btn}
+              onClick={() => choose(opt)}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
       )}
 
-      {completed && (
-        <button style={completeBtn} onClick={onComplete}>
-          Puzzle Solved 💙
-        </button>
+      {showResult && (
+        <>
+          <p style={result}>
+            {matched ? "Puzzle solved 🔥" : "Mismatch 😄"}
+          </p>
+          <button style={continueBtn} onClick={next}>
+            Continue ▶️
+          </button>
+        </>
       )}
     </div>
   );
@@ -72,67 +106,50 @@ export default function MiniGamePuzzle({ onComplete }) {
 /* ---------- STYLES ---------- */
 
 const card = {
-  width: "100%",
-  maxWidth: "360px",
+  maxWidth: 360,
   background: "#020617",
-  borderRadius: "22px",
-  padding: "24px 20px",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+  padding: 24,
+  borderRadius: 20,
   textAlign: "center"
 };
 
 const title = {
-  fontSize: "18px",
-  marginBottom: "10px"
+  fontSize: 18,
+  marginBottom: 8
 };
 
-const instruction = {
-  fontSize: "14px",
+const text = {
+  fontSize: 14,
   color: "#c7d2fe",
-  marginBottom: "14px"
+  marginBottom: 16
 };
 
-const sequence = {
+const grid = {
   display: "flex",
   justifyContent: "center",
-  gap: "10px",
-  marginBottom: "16px"
+  gap: 12
 };
 
-const seqItem = {
-  fontSize: "20px"
-};
-
-const buttons = {
-  display: "flex",
-  justifyContent: "center",
-  gap: "12px",
-  marginBottom: "14px"
-};
-
-const button = {
-  padding: "14px",
-  borderRadius: "14px",
+const btn = {
+  padding: 18,
+  fontSize: 20,
+  borderRadius: 14,
   border: "none",
   background: "#38bdf8",
-  color: "#020617",
-  fontSize: "18px",
   cursor: "pointer"
 };
 
-const errorText = {
-  fontSize: "13px",
-  color: "#fca5a5",
-  marginBottom: "10px"
+const result = {
+  fontSize: 16,
+  marginBottom: 14,
+  color: "#a5b4fc"
 };
 
-const completeBtn = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "12px",
+const continueBtn = {
+  padding: "10px 18px",
+  borderRadius: 14,
   border: "none",
   background: "#22c55e",
-  color: "#020617",
-  fontWeight: "600",
+  fontWeight: 700,
   cursor: "pointer"
 };
