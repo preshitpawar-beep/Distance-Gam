@@ -8,177 +8,198 @@ import StoryEngine from "./StoryEngine";
 import MiniGameChoice from "./MiniGameChoice";
 import MiniGameTap from "./MiniGameTap";
 import MiniGamePuzzle from "./MiniGamePuzzle";
-import { markCompleted, hasCompleted } from "../lib/replay";
+import MiniGameMemory from "./MiniGameMemory";
+import { STORY } from "../lib/storyData";
 
 /*
-  GAME RULES (CONTENT-DRIVEN, NOT REPETITIVE)
+  ================================
+  GAME DESIGN (FINAL & STABLE)
+  ================================
 
-  - 4 Levels total
-  - Each level = 10 prompts
-  - After each level → 1 mini-game
-  - Total prompts ≈ 40+
-  - Mini-games are spaced, not spammed
+  - Questions NEVER repeat in one run
+  - All mini-games appear in a fixed order
+  - Both players stay perfectly in sync
+  - Progression is deterministic (no guessing)
+
+  FLOW:
+  5 prompts → Choice Game
+  5 prompts → Tap Game
+  5 prompts → Puzzle Game
+  5 prompts → Memory Game
+  → End
 */
 
-const PROMPTS_PER_LEVEL = 10;
-const TOTAL_LEVELS = 4;
+const PROMPTS_BEFORE_GAME = 5;
+
+const GAME_SEQUENCE = [
+  "choice",
+  "tap",
+  "puzzle",
+  "memory"
+];
 
 export default function GameFlow({ room }) {
+  const roomRef = doc(db, "rooms", room);
+
   const [stage, setStage] = useState("story"); // story | mini | end
-  const [promptCount, setPromptCount] = useState(0);
-  const [level, setLevel] = useState(1);
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [usedPrompts, setUsedPrompts] = useState([]);
   const [miniIndex, setMiniIndex] = useState(0);
+  const [promptCounter, setPromptCounter] = useState(0);
 
-  const ref = doc(db, "rooms", room);
-
-  /* ---------- REAL-TIME SKIP ---------- */
+  /* --------------------------------
+     REAL-TIME ROOM STATE
+  -------------------------------- */
   useEffect(() => {
-    const unsub = onSnapshot(ref, (snap) => {
+    const unsub = onSnapshot(roomRef, (snap) => {
       if (!snap.exists()) return;
-      if (snap.data().skip === true) {
-        advance();
-        setDoc(ref, { skip: false }, { merge: true });
+
+      const data = snap.data();
+
+      if (typeof data.promptIndex === "number") {
+        setPromptIndex(data.promptIndex);
+      }
+
+      if (Array.isArray(data.usedPrompts)) {
+        setUsedPrompts(data.usedPrompts);
+      }
+
+      if (typeof data.miniIndex === "number") {
+        setMiniIndex(data.miniIndex);
+      }
+
+      if (typeof data.promptCounter === "number") {
+        setPromptCounter(data.promptCounter);
+      }
+
+      if (data.stage) {
+        setStage(data.stage);
       }
     });
+
     return () => unsub();
-  }, [promptCount, stage, level]);
+  }, []);
 
-  /* ---------- GAME PROGRESSION ---------- */
-  function advance() {
-    // From STORY → MINI-GAME every N prompts
+  /* --------------------------------
+     ADVANCE LOGIC (SINGLE SOURCE)
+  -------------------------------- */
+  async function advance() {
+    // STORY → count prompt
     if (stage === "story") {
-      const nextCount = promptCount + 1;
-      setPromptCount(nextCount);
+      const nextPromptCounter = promptCounter + 1;
 
-      // Level boundary reached → trigger mini-game
-      if (nextCount % PROMPTS_PER_LEVEL === 0) {
-        setStage("mini");
+      // Pick next unused question
+      let nextPrompt = promptIndex + 1;
+      while (usedPrompts.includes(nextPrompt) && nextPrompt < STORY.length) {
+        nextPrompt++;
       }
+
+      // If no prompts left → go to end
+      if (nextPrompt >= STORY.length) {
+        await setDoc(roomRef, { stage: "end" }, { merge: true });
+        return;
+      }
+
+      // Every N prompts → mini-game
+      if (nextPromptCounter % PROMPTS_BEFORE_GAME === 0) {
+        await setDoc(
+          roomRef,
+          {
+            stage: "mini",
+            usedPrompts: [...usedPrompts, promptIndex],
+            promptCounter: nextPromptCounter
+          },
+          { merge: true }
+        );
+        return;
+      }
+
+      // Normal prompt advance
+      await setDoc(
+        roomRef,
+        {
+          promptIndex: nextPrompt,
+          usedPrompts: [...usedPrompts, promptIndex],
+          promptCounter: nextPromptCounter
+        },
+        { merge: true }
+      );
       return;
     }
 
-    // From MINI-GAME → next LEVEL or END
+    // MINI-GAME → next prompt or end
     if (stage === "mini") {
-      if (level < TOTAL_LEVELS) {
-        setLevel(l => l + 1);
-        setMiniIndex(i => (i + 1) % 3);
-        setStage("story");
-      } else {
-        setStage("end");
+      const nextMini = miniIndex + 1;
+
+      if (nextMini >= GAME_SEQUENCE.length) {
+        await setDoc(roomRef, { stage: "end" }, { merge: true });
+        return;
       }
+
+      await setDoc(
+        roomRef,
+        {
+          stage: "story",
+          miniIndex: nextMini
+        },
+        { merge: true }
+      );
     }
   }
 
-  /* ---------- END SCREEN ---------- */
+  /* --------------------------------
+     END SCREEN
+  -------------------------------- */
   if (stage === "end") {
-    const replay = hasCompleted(room);
-    markCompleted(room);
-
     return (
       <div style={card}>
         <h2 style={title}>🎉 Game Complete!</h2>
-
         <p style={text}>
-          You survived all {TOTAL_LEVELS} levels 😄
+          You played all games and finished all questions 😄
         </p>
-
-        {replay ? (
-          <p style={text}>
-            Back again? Respect. Absolute party legends 🕺💃
-          </p>
-        ) : (
-          <p style={text}>
-            That was chaotic, fast, and fun — exactly as intended.
-          </p>
-        )}
-
         <p style={ending}>✨ The End ✨</p>
       </div>
     );
   }
 
-  /* ---------- UI ---------- */
+  /* --------------------------------
+     MINI-GAMES
+  -------------------------------- */
+  if (stage === "mini") {
+    const game = GAME_SEQUENCE[miniIndex];
+
+    return (
+      <>
+        {game === "choice" && (
+          <MiniGameChoice room={room} onComplete={advance} />
+        )}
+        {game === "tap" && (
+          <MiniGameTap onComplete={advance} />
+        )}
+        {game === "puzzle" && (
+          <MiniGamePuzzle onComplete={advance} />
+        )}
+        {game === "memory" && (
+          <MiniGameMemory onComplete={advance} />
+        )}
+      </>
+    );
+  }
+
+  /* --------------------------------
+     STORY (PROMPTS)
+  -------------------------------- */
   return (
-    <div style={{ width: "100%" }}>
-      {/* LEVEL HEADER */}
-      <div style={levelBar}>
-        <div style={levelText}>
-          Level {level} / {TOTAL_LEVELS}
-        </div>
-        <div style={progressOuter}>
-          <div
-            style={{
-              ...progressInner,
-              width: `${(level / TOTAL_LEVELS) * 100}%`
-            }}
-          />
-        </div>
-      </div>
-
-      {/* SKIP */}
-      <div style={skipBar}>
-        <button style={skipBtn} onClick={() => setDoc(ref, { skip: true }, { merge: true })}>
-          Skip ⏭️
-        </button>
-      </div>
-
-      {/* CONTENT */}
-      {stage === "story" && (
-        <StoryEngine room={room} onChapterComplete={advance} />
-      )}
-
-      {stage === "mini" && (
-        <>
-          {miniIndex === 0 && <MiniGameChoice room={room} onComplete={advance} />}
-          {miniIndex === 1 && <MiniGameTap onComplete={advance} />}
-          {miniIndex === 2 && <MiniGamePuzzle onComplete={advance} />}
-        </>
-      )}
-    </div>
+    <StoryEngine
+      room={room}
+      onChapterComplete={advance}
+    />
   );
 }
 
-/* ---------- STYLES ---------- */
-
-const levelBar = {
-  marginBottom: 12
-};
-
-const levelText = {
-  fontSize: 14,
-  marginBottom: 6,
-  color: "#c7d2fe"
-};
-
-const progressOuter = {
-  width: "100%",
-  height: 8,
-  background: "#1e293b",
-  borderRadius: 6,
-  overflow: "hidden"
-};
-
-const progressInner = {
-  height: "100%",
-  background: "#38bdf8",
-  transition: "width 0.3s ease"
-};
-
-const skipBar = {
-  display: "flex",
-  justifyContent: "flex-end",
-  marginBottom: 10
-};
-
-const skipBtn = {
-  padding: "6px 12px",
-  borderRadius: 10,
-  border: "none",
-  background: "#334155",
-  color: "#e5e7eb",
-  fontSize: 12,
-  cursor: "pointer"
-};
+/* --------------------------------
+   STYLES
+-------------------------------- */
 
 const card = {
   width: "100%",
