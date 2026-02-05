@@ -4,49 +4,21 @@ import { useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-const QUESTIONS = [
-  {
-    text: "Pick the same option!",
-    options: ["🔥 Fire", "🌊 Water"]
-  },
-  {
-    text: "Try to match!",
-    options: ["🍕 Pizza", "🍔 Burger"]
-  },
-  {
-    text: "Telepathy test!",
-    options: ["😎 Cool", "🤪 Crazy"]
-  }
-];
-
 export default function MiniGameChoice({ room, onComplete }) {
-  const roomRef = doc(db, "rooms", room, "mini", "choice");
-
-  const [index, setIndex] = useState(0);
+  const ref = doc(db, "rooms", room, "mini", "choice");
   const [answers, setAnswers] = useState({});
-  const [showResult, setShowResult] = useState(false);
 
-  const question = QUESTIONS[index];
-
-  // Sync answers in real time
   useEffect(() => {
-    const unsub = onSnapshot(roomRef, snap => {
+    const unsub = onSnapshot(ref, snap => {
       if (!snap.exists()) return;
       setAnswers(snap.data().answers || {});
     });
     return () => unsub();
   }, []);
 
-  // Show result when both answered
-  useEffect(() => {
-    if (Object.keys(answers).length === 2) {
-      setShowResult(true);
-    }
-  }, [answers]);
-
   async function choose(option) {
     await setDoc(
-      roomRef,
+      ref,
       {
         answers: {
           ...answers,
@@ -57,50 +29,38 @@ export default function MiniGameChoice({ room, onComplete }) {
     );
   }
 
-  async function nextQuestion() {
-    if (index < QUESTIONS.length - 1) {
-      // Move to next question
-      await setDoc(roomRef, { answers: {} }, { merge: true });
-      setAnswers({});
-      setShowResult(false);
-      setIndex(i => i + 1);
-    } else {
-      // 🔥 GAME COMPLETE → MOVE ON
-      await setDoc(roomRef, { answers: {} }, { merge: true });
-      onComplete();
-    }
-  }
-
   const values = Object.values(answers);
-  const matched =
-    values.length === 2 && values[0] === values[1];
+  const ready = values.length === 2;
+  const matched = ready && values[0] === values[1];
 
   return (
     <div style={card}>
       <h3 style={title}>Same Choice 🎯</h3>
-      <p style={text}>{question.text}</p>
+      <p style={text}>Try to pick the same option</p>
 
-      {!showResult && (
+      {!ready && (
         <div style={options}>
-          {question.options.map((opt, i) => (
-            <button
-              key={i}
-              style={btn}
-              onClick={() => choose(opt)}
-            >
-              {opt}
-            </button>
-          ))}
+          <button style={btn} onClick={() => choose("LEFT")}>
+            LEFT ⬅️
+          </button>
+          <button style={btn} onClick={() => choose("RIGHT")}>
+            RIGHT ➡️
+          </button>
         </div>
       )}
 
-      {showResult && (
+      {ready && (
         <>
           <p style={result}>
-            {matched ? "Perfect match 🔥" : "Not this time 😄"}
+            {matched ? "Perfect match 🔥" : "Not matched 😄"}
           </p>
-
-          <button style={continueBtn} onClick={nextQuestion}>
+          <button
+            style={continueBtn}
+            onClick={async () => {
+              await setDoc(ref, { answers: {} }, { merge: true });
+              onComplete();
+            }}
+          >
             Continue ▶️
           </button>
         </>
@@ -109,53 +69,11 @@ export default function MiniGameChoice({ room, onComplete }) {
   );
 }
 
-/* ---------- STYLES ---------- */
-
-const card = {
-  maxWidth: 360,
-  background: "#020617",
-  padding: 24,
-  borderRadius: 20,
-  textAlign: "center"
-};
-
-const title = {
-  fontSize: 18,
-  marginBottom: 8
-};
-
-const text = {
-  fontSize: 14,
-  color: "#c7d2fe",
-  marginBottom: 16
-};
-
-const options = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 12
-};
-
-const btn = {
-  padding: 14,
-  borderRadius: 14,
-  border: "none",
-  background: "#38bdf8",
-  fontWeight: 600,
-  cursor: "pointer"
-};
-
-const result = {
-  fontSize: 16,
-  marginBottom: 14,
-  color: "#a5b4fc"
-};
-
-const continueBtn = {
-  padding: "10px 18px",
-  borderRadius: 14,
-  border: "none",
-  background: "#22c55e",
-  fontWeight: 700,
-  cursor: "pointer"
-};
+/* styles */
+const card = { maxWidth: 360, padding: 24, background: "#020617", borderRadius: 20, textAlign: "center" };
+const title = { fontSize: 18, marginBottom: 8 };
+const text = { fontSize: 14, color: "#c7d2fe", marginBottom: 16 };
+const options = { display: "flex", gap: 12, justifyContent: "center" };
+const btn = { padding: 14, borderRadius: 14, background: "#38bdf8", border: "none", cursor: "pointer" };
+const result = { marginBottom: 14, color: "#a5b4fc" };
+const continueBtn = { padding: "10px 18px", borderRadius: 14, background: "#22c55e", border: "none", fontWeight: 700 };
