@@ -1,72 +1,75 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { STORY } from "../lib/storyData";
+import { db } from "../lib/firebase";
 import {
-  saveChoice,
-  getChoices,
-  clearChoices
-} from "../lib/multiplayer";
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc
+} from "firebase/firestore";
+import { STORY } from "../lib/storyData";
 
 export default function StoryEngine({ room, onChapterComplete }) {
   const [sceneIndex, setSceneIndex] = useState(0);
+  const [choices, setChoices] = useState({});
   const [status, setStatus] = useState("choose"); 
-  // choose | waiting | result
+  // choose | result
 
   const scene = STORY[sceneIndex];
+  const ref = doc(db, "rooms", room, "story", String(sceneIndex));
 
-  function handleChoice(choice) {
-    saveChoice(room, scene.id, choice);
-    setStatus("waiting");
-  }
-
+  // 🔥 Listen for real-time choices
   useEffect(() => {
-    if (status !== "waiting") return;
-
-    const interval = setInterval(() => {
-      const choices = getChoices(room, scene.id);
-
-      if (choices.length === 2) {
-        clearInterval(interval);
-        setStatus("result");
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setChoices(data.choices || {});
       }
-    }, 800);
+    });
 
-    return () => clearInterval(interval);
-  }, [status, room, scene]);
+    return () => unsub();
+  }, [sceneIndex]);
 
-  useEffect(() => {
-    if (status !== "result") return;
-
-    const timeout = setTimeout(() => {
-      clearChoices(room, scene.id);
-      setStatus("choose");
-
-      // Notify GameFlow after each chapter
-      if (onChapterComplete) {
-        onChapterComplete();
-      }
-
-      setSceneIndex((prev) => prev + 1);
-    }, 2500);
-
-    return () => clearTimeout(timeout);
-  }, [status, room, scene, onChapterComplete]);
-
-  if (!scene) {
-    return (
-      <div style={card}>
-        <h2 style={title}>✨ Story Complete ✨</h2>
-        <p style={text}>
-          Every choice you made brought you closer.
-        </p>
-      </div>
+  async function choose(option) {
+    await setDoc(
+      ref,
+      {
+        choices: {
+          ...choices,
+          [crypto.randomUUID()]: option
+        }
+      },
+      { merge: true }
     );
   }
 
-  const choices = getChoices(room, scene.id);
+  useEffect(() => {
+    const values = Object.values(choices);
+    if (values.length === 2) {
+      setStatus("result");
+
+      const timeout = setTimeout(async () => {
+        setStatus("choose");
+        setChoices({});
+        setSceneIndex((i) => i + 1);
+
+        if (onChapterComplete) {
+          onChapterComplete();
+        }
+      }, 2000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [choices]);
+
+  if (!scene) {
+    return null;
+  }
+
+  const values = Object.values(choices);
   const matched =
-    choices.length === 2 && choices[0] === choices[1];
+    values.length === 2 && values[0] === values[1];
 
   return (
     <div style={card}>
@@ -79,16 +82,12 @@ export default function StoryEngine({ room, onChapterComplete }) {
             <button
               key={i}
               style={button}
-              onClick={() => handleChoice(c)}
+              onClick={() => choose(c)}
             >
               {c}
             </button>
           ))}
         </div>
-      )}
-
-      {status === "waiting" && (
-        <p style={waiting}>Waiting for the other player…</p>
       )}
 
       {status === "result" && (
@@ -139,11 +138,6 @@ const button = {
   color: "#020617",
   fontWeight: "600",
   cursor: "pointer"
-};
-
-const waiting = {
-  fontSize: "14px",
-  color: "#94a3b8"
 };
 
 const result = {
