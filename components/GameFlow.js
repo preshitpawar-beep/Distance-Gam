@@ -1,32 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { db } from "../lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+
 import StoryEngine from "./StoryEngine";
-import MiniGameMemory from "./MiniGameMemory";
 import MiniGameChoice from "./MiniGameChoice";
 import MiniGameTap from "./MiniGameTap";
 import MiniGamePuzzle from "./MiniGamePuzzle";
 import { markCompleted, hasCompleted } from "../lib/replay";
 
 export default function GameFlow({ room }) {
-  const [stage, setStage] = useState("story");
+  const [stage, setStage] = useState("story"); // story | mini | end
   const [miniIndex, setMiniIndex] = useState(0);
   const [storyDone, setStoryDone] = useState(false);
 
-  const miniGames = [
-    <MiniGameMemory onComplete={nextMini} />,
-    <MiniGameChoice room={room} onComplete={nextMini} />,
-    <MiniGameTap onComplete={nextMini} />,
-    <MiniGamePuzzle onComplete={nextMini} />
-  ];
+  const ref = doc(db, "rooms", room);
 
-  function nextMini() {
-    if (miniIndex < miniGames.length - 1) {
-      setMiniIndex((i) => i + 1);
-      setStage("story");
-    } else {
-      setStoryDone(true);
+  // 🔥 Listen for skip events
+  useEffect(() => {
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      if (data.skip === true) {
+        advance();
+        setDoc(ref, { skip: false }, { merge: true });
+      }
+    });
+
+    return () => unsub();
+  }, [miniIndex, stage]);
+
+  function advance() {
+    if (stage === "story") {
+      setStage("mini");
+      return;
     }
+
+    if (stage === "mini") {
+      if (miniIndex < 2) {
+        setMiniIndex((i) => i + 1);
+        setStage("story");
+      } else {
+        setStoryDone(true);
+      }
+    }
+  }
+
+  function skip() {
+    setDoc(ref, { skip: true }, { merge: true });
   }
 
   if (storyDone) {
@@ -59,17 +82,48 @@ export default function GameFlow({ room }) {
     );
   }
 
-  return stage === "story" ? (
-    <StoryEngine
-      room={room}
-      onChapterComplete={() => setStage("mini")}
-    />
-  ) : (
-    miniGames[miniIndex]
+  return (
+    <div style={{ width: "100%" }}>
+      <div style={skipBar}>
+        <button style={skipBtn} onClick={skip}>
+          Skip ⏭️
+        </button>
+      </div>
+
+      {stage === "story" && (
+        <StoryEngine room={room} onChapterComplete={advance} />
+      )}
+
+      {stage === "mini" && (
+        <>
+          {miniIndex === 0 && (
+            <MiniGameChoice room={room} onComplete={advance} />
+          )}
+          {miniIndex === 1 && <MiniGameTap onComplete={advance} />}
+          {miniIndex === 2 && <MiniGamePuzzle onComplete={advance} />}
+        </>
+      )}
+    </div>
   );
 }
 
 /* ---------- STYLES ---------- */
+
+const skipBar = {
+  display: "flex",
+  justifyContent: "flex-end",
+  marginBottom: "8px"
+};
+
+const skipBtn = {
+  padding: "6px 12px",
+  borderRadius: "10px",
+  border: "none",
+  background: "#334155",
+  color: "#e5e7eb",
+  fontSize: "12px",
+  cursor: "pointer"
+};
 
 const card = {
   width: "100%",
@@ -78,7 +132,8 @@ const card = {
   borderRadius: "22px",
   padding: "28px 22px",
   boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
-  textAlign: "center"
+  textAlign: "center",
+  margin: "0 auto"
 };
 
 const title = {
