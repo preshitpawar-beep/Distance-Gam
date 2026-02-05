@@ -1,6 +1,6 @@
 "use client";
 
-import RealtimeTest from "./RealtimeTest";
+import GameFlow from "./GameFlow";
 
 export default function GameCanvas({ room, names }) {
   return (
@@ -23,8 +23,7 @@ export default function GameCanvas({ room, names }) {
 
       {/* Game Area */}
       <div style={gameArea}>
-        {/* 🔥 REAL-TIME SYNC TEST */}
-        <RealtimeTest room={room} />
+        <GameFlow room={room} />
       </div>
 
       {/* Footer */}
